@@ -509,6 +509,7 @@ enum rtl8168_registers {
 #define PWM_EN				(1 << 22)
 #define RXDV_GATED_EN			(1 << 19)
 #define EARLY_TALLY_EN			(1 << 16)
+#define FORCE_CLK			(1 << 15) /* force clock request */
 };
 
 enum rtl_register_content {
@@ -860,6 +861,8 @@ MODULE_AUTHOR("Realtek and the Linux r8169 crew <netdev@vger.kernel.org>");
 MODULE_DESCRIPTION("RealTek RTL-8169 Gigabit Ethernet driver");
 module_param(use_dac, int, 0);
 MODULE_PARM_DESC(use_dac, "Enable PCI DAC. Unsafe on 32 bit PCI slot.");
+module_param(force_aspm, int, 0);
+MODULE_PARM_DESC(use_dac, "Enable ASPM power saving feature despite of increased stability");
 module_param_named(debug, debug.msg_enable, int, 0);
 MODULE_PARM_DESC(debug, "Debug verbosity level (0=none, ..., 16=all)");
 MODULE_LICENSE("GPL");
@@ -1233,6 +1236,7 @@ static void rtl_ephy_write(struct rtl8169_private *tp, int reg_addr, int value)
 		(reg_addr & EPHYAR_REG_MASK) << EPHYAR_REG_SHIFT);
 
 	rtl_udelay_loop_wait_low(tp, &rtl_ephyar_cond, 10, 100);
+        printk("ephy written\n");
 
 	udelay(10);
 }
@@ -5905,8 +5909,9 @@ static void rtl_hw_start_8168e_2(struct rtl8169_private *tp)
 	rtl_w0w1_eri(tp, 0x0d4, ERIAR_MASK_0011, 0x0c00, 0xff00, ERIAR_EXGMAC);
 
 	RTL_W8(MaxTxPacketSize, EarlySize);
-
-	rtl_disable_clock_request(pdev);
+        
+	if(!force_aspm)
+            rtl_disable_clock_request(pdev);
 
 	RTL_W32(TxConfig, RTL_R32(TxConfig) | TXCFG_AUTO_FIFO);
 	RTL_W8(MCU, RTL_R8(MCU) & ~NOW_IS_OOB);
@@ -5916,7 +5921,8 @@ static void rtl_hw_start_8168e_2(struct rtl8169_private *tp)
 
 	RTL_W8(DLLPR, RTL_R8(DLLPR) | PFM_EN);
 	RTL_W32(MISC, RTL_R32(MISC) | PWM_EN);
-	RTL_W8(Config5, RTL_R8(Config5) & ~Spi_en);
+	RTL_W8(Config5, (RTL_R8(Config5) & ~Spi_en) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
 }
 
 static void rtl_hw_start_8168f(struct rtl8169_private *tp)
@@ -5940,14 +5946,16 @@ static void rtl_hw_start_8168f(struct rtl8169_private *tp)
 	rtl_eri_write(tp, 0xd0, ERIAR_MASK_1111, 0x00000060, ERIAR_EXGMAC);
 
 	RTL_W8(MaxTxPacketSize, EarlySize);
-
-	rtl_disable_clock_request(pdev);
+        
+        if(force_aspm)
+            rtl_disable_clock_request(pdev);
 
 	RTL_W32(TxConfig, RTL_R32(TxConfig) | TXCFG_AUTO_FIFO);
 	RTL_W8(MCU, RTL_R8(MCU) & ~NOW_IS_OOB);
 	RTL_W8(DLLPR, RTL_R8(DLLPR) | PFM_EN);
-	RTL_W32(MISC, RTL_R32(MISC) | PWM_EN);
-	RTL_W8(Config5, RTL_R8(Config5) & ~Spi_en);
+	RTL_W32(MISC, RTL_R32(MISC) | PWM_EN | FORCE_CLK);
+	RTL_W8(Config5, (RTL_R8(Config5) & ~Spi_en) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
 }
 
 static void rtl_hw_start_8168f_1(struct rtl8169_private *tp)
@@ -6074,7 +6082,12 @@ static void rtl_hw_start_8411_2(struct rtl8169_private *tp)
 	/* disable aspm and clock request before access ephy */
 	RTL_W8(Config2, RTL_R8(Config2) & ~ClkReqEn);
 	RTL_W8(Config5, RTL_R8(Config5) & ~ASPM_en);
+        printk("start\n");
 	rtl_ephy_init(tp, e_info_8411_2, ARRAY_SIZE(e_info_8411_2));
+        printk("end\n");
+        RTL_W8(Config5, RTL_R8(Config5) | ASPM_en);
+	RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
+	RTL_W32(MISC, RTL_R32(MISC) | FORCE_CLK);
 }
 
 static void rtl_hw_start_8168h_1(struct rtl8169_private *tp)
@@ -8188,8 +8201,20 @@ static int rtl_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	/* disable ASPM completely as that cause random device stop working
 	 * problems as well as full system hangs for some PCIe devices users */
+	if(r8169_disable_aspm)
+        {
 	pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1 |
 				     PCIE_LINK_STATE_CLKPM);
+            printk("r8169: ASPM disabled\n");
+        }
+        else
+        {
+         //   RTL_W8(0x6E, RTL_R8(0x6E) | (1 << 6));
+         //   rtl_eri_write(tp, 0x1AE, 0xFFF, 0x0403, 0);
+            printk("r8169: ASPM not disabled\n");
+        }
+        
+        
 
 	/* enable device (incl. PCI PM wakeup and hotplug setup) */
 	rc = pci_enable_device(pdev);
@@ -8247,11 +8272,22 @@ static int rtl_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 	tp->mmio_addr = ioaddr;
 
+      /*  if(!r8169_disable_aspm)
+        {
+            RTL_W8(0x6E, RTL_R8(0x6E) | (1 << 6));
+            rtl_eri_write(tp, 0x1AE, 0xFFF, 0x0403, 0);
+            printk("r8169: ASPM not disabled\n");
+        }
+*/        
 	if (!pci_is_pcie(pdev))
 		netif_info(tp, probe, dev, "not PCI Express\n");
 
 	/* Identify chip attached to board */
 	rtl8169_get_mac_version(tp, dev, cfg->default_ver);
+        
+        printk(KERN_INFO "Mac Version:%d#%d#%d\n",
+            tp->mac_version, RTL_GIGA_MAC_VER_38, RTL_GIGA_MAC_VER_44);
+        
 
 	rtl_init_rxcfg(tp);
 
