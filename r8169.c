@@ -6126,7 +6126,14 @@ static void rtl_hw_start_8168h_1(struct rtl8169_private *tp)
 	RTL_W8(Config2, RTL_R8(Config2) & ~ClkReqEn);
 	RTL_W8(Config5, RTL_R8(Config5) & ~ASPM_en);
 	rtl_ephy_init(tp, e_info_8168h_1, ARRAY_SIZE(e_info_8168h_1));
-
+	
+	if(r8169_force_aspm)
+	{
+		RTL_W8(Config5, RTL_R8(Config5) | ASPM_en);
+		RTL_W8(Config2, RTL_R8(Config2) | ClkReqEn);
+		RTL_W32(MISC, RTL_R32(MISC) | FORCE_CLK);
+	}
+	
 	RTL_W32(TxConfig, RTL_R32(TxConfig) | TXCFG_AUTO_FIFO);
 
 	rtl_eri_write(tp, 0xc8, ERIAR_MASK_0101, 0x00080002, ERIAR_EXGMAC);
