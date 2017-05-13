@@ -1,5 +1,5 @@
 KDIR ?= /lib/modules/$(shell uname -r)/build
-obj-m := r8169.o
+obj-m := r8169_aspm.o
 
 all:
 	make -C $(KDIR) M=$$PWD modules
