@@ -1,3 +1,7 @@
+# Maybe deprecated since 4.19
+I haven't verified power consumption on linux > 4.19 but there seems to be some ASPM related changes:
+https://github.com/torvalds/linux/commit/a99790bf5c7f3d68d8b01e015d3212a98ee7bd57
+
 # r8169
 
 ASPM [1] is disabled for Realtek network chips by default when running linux. This leads to a vast increase in power consumption on certain systems. This patch enables ASPM on some chips to prolong battery life and decrease cpu temperature.
