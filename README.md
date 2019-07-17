@@ -60,7 +60,7 @@ This driver, provided by Realtek itself, worked for me to prevent the ASPM bug. 
 # Installation
 Please remove/save your old r8169 module before installing this module. Its in 
 ```
-/var/lib/modules/($uname -r)/kernel/drivers/net/ethernet/realtek/r8169.ko.gz
+/var/lib/modules/$(uname -r)/kernel/drivers/net/ethernet/realtek/r8169.ko.gz
 ```
 for me.
 
