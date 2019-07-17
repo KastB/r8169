@@ -1,5 +1,5 @@
 # Maybe deprecated since 4.19
-I haven't verified power consumption on linux > 4.19 but there seems to be some ASPM related changes:
+I haven't verified power consumption on linux > 4.19 but there seems to be some ASPM related change:
 https://github.com/torvalds/linux/commit/a99790bf5c7f3d68d8b01e015d3212a98ee7bd57
 
 # r8169
